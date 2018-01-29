@@ -37,6 +37,22 @@ fn format_value(val: Value) -> Result<String, Error> {
     Ok(out)
 }
 
+fn format_level(level: String) -> Option<String> {
+    let lvl_lower = level.to_lowercase();
+
+    if lvl_lower != "trace" && lvl_lower != "debug" && lvl_lower != "info" && lvl_lower != "warn"
+        && lvl_lower != "error" && lvl_lower != "fatal"
+    {
+        return None;
+    }
+
+    if level.len() == 4 {
+        return Some(format!(" {}: ", level.to_uppercase()));
+    } else {
+        return Some(format!("{}: ", level.to_uppercase()));
+    }
+}
+
 fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
     let mut buf = String::new();
     let mut keys = BTreeSet::new();
@@ -70,7 +86,26 @@ fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
     }
 
     // Then the log level
-    if keys.contains(&String::from("level")) {}
+    let level_key = String::from("level");
+    if keys.contains(&level_key) {
+        let val = obj.get(&level_key);
+        match val {
+            Some(v) => match v.clone() {
+                Value::String(lvl_str) => {
+                    let formatted_lvl_str = format_level(lvl_str);
+                    match formatted_lvl_str {
+                        Some(s) => {
+                            buf.push_str(&s);
+                            keys.remove(&level_key);
+                        }
+                        None => {}
+                    }
+                }
+                _ => {}
+            },
+            None => {}
+        }
+    }
 
     // Then add the actual log message
     // vec!["message", "msg"]
@@ -126,7 +161,7 @@ mod tests {
     #[test]
     fn reformat_obj_with_time_no_params() {
         let a = super::reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\"}").unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z]");
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] ");
     }
 
     #[test]
