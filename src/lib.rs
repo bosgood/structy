@@ -39,15 +39,19 @@ fn format_value(val: Value) -> Result<String, Error> {
 fn format_level(level: String) -> Option<String> {
     let lvl_lower = level.to_lowercase();
 
-    match lvl_lower.as_str() {
-        "trace" => Some(String::from("TRACE: ")),
-        "debug" => Some(String::from("DEBUG: ")),
-        "info" => Some(String::from(" INFO: ")),
-        "warn" => Some(String::from(" WARN: ")),
-        "error" => Some(String::from("ERROR: ")),
-        "fatal" => Some(String::from("FATAL: ")),
-        _ => None,
+    let xxx = match lvl_lower.as_str() {
+        "trace" => "TRACE".normal(),
+        "debug" => "DEBUG".green(),
+        "info" => " INFO".blue(),
+        "warn" => " WARN".yellow(),
+        "error" => "ERROR".red(),
+        "fatal" => "FATAL".red(),
+        _ => "".normal(),
+    };
+    if xxx == "".normal() {
+        return None;
     }
+    Some(format!("{}: ", xxx))
 }
 
 fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
@@ -198,7 +202,10 @@ mod tests {
         let a = super::reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"debug\", \"a\": 17}",
         ).unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z] DEBUG: a=17");
+        assert_eq!(
+            a,
+            "[2018-01-29T00:50:43.176Z] \u{1b}[32mDEBUG\u{1b}[0m: a=17"
+        );
     }
 
     #[test]
@@ -206,7 +213,10 @@ mod tests {
         let a = super::reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"info\", \"a\": 17}",
         ).unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z]  INFO: a=17");
+        assert_eq!(
+            a,
+            "[2018-01-29T00:50:43.176Z] \u{1b}[34m INFO\u{1b}[0m: a=17"
+        );
     }
 
     #[test]
@@ -214,7 +224,10 @@ mod tests {
         let a = super::reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"warn\", \"a\": 17}",
         ).unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z]  WARN: a=17");
+        assert_eq!(
+            a,
+            "[2018-01-29T00:50:43.176Z] \u{1b}[33m WARN\u{1b}[0m: a=17"
+        );
     }
 
     #[test]
@@ -222,7 +235,10 @@ mod tests {
         let a = super::reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"error\", \"a\": 17}",
         ).unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z] ERROR: a=17");
+        assert_eq!(
+            a,
+            "[2018-01-29T00:50:43.176Z] \u{1b}[31mERROR\u{1b}[0m: a=17"
+        );
     }
 
     #[test]
@@ -230,7 +246,10 @@ mod tests {
         let a = super::reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"a\": 17}",
         ).unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z] FATAL: a=17");
+        assert_eq!(
+            a,
+            "[2018-01-29T00:50:43.176Z] \u{1b}[31mFATAL\u{1b}[0m: a=17"
+        );
     }
 
     #[test]
@@ -238,7 +257,10 @@ mod tests {
         let a = super::reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"it's burning\"}",
         ).unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z] FATAL: it's burning");
+        assert_eq!(
+            a,
+            "[2018-01-29T00:50:43.176Z] \u{1b}[31mFATAL\u{1b}[0m: it's burning"
+        );
     }
 
     #[test]
@@ -248,7 +270,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] FATAL: something is on fire! a=17"
+            "[2018-01-29T00:50:43.176Z] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! a=17"
         );
     }
 
@@ -259,7 +281,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] FATAL: something is on fire! a=17 b=18"
+            "[2018-01-29T00:50:43.176Z] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! a=17 b=18"
         );
     }
 
