@@ -8,31 +8,36 @@ use colored::*;
 use serde_json::{Error, Value};
 use clap::App;
 
-fn reformat_str(blah: &str) -> Result<&'static str, serde_json::Error> {
-    let val: serde_json::Value = serde_json::from_str(blah)?;
+fn reformat_str(input: &str) -> Result<String, Error> {
+    let val: Value = serde_json::from_str(input)?;
     return reformat_value(val);
 }
 
-fn reformat_value(val: serde_json::Value) -> Result<&'static str, serde_json::Error> {
+fn reformat_value(val: Value) -> Result<String, Error> {
     let out = match val {
-        serde_json::Value::Number(l) => format!("{}", l).green(),
-        serde_json::Value::Bool(l) => format!("{}", l).green(),
-        serde_json::Value::Null => "null".green(),
-        serde_json::Value::String(l) => format!("{}", l).green(),
-        serde_json::Value::Array(arr) => {
+        Value::Number(l) => format!("{}", l), //.green(),
+        Value::Bool(l) => format!("{}", l),   //.green(),
+        Value::Null => String::from("null"),  //.green(),
+        Value::String(l) => format!("{}", l), //.green(),
+        Value::Array(arr) => {
             let mut buf = String::new();
+
             buf.push('[');
-            for item in arr {
-                buf.push_str(reformat_value(item)?);
+            for (i, item) in arr.iter().enumerate() {
+                if i > 0 {
+                    buf.push(' ');
+                }
+                buf.push_str(&reformat_value(item.clone())?);
             }
             buf.push(']');
-            colored::ColoredString::from(buf.as_str())
+            buf
+            // colored::ColoredString::from(buf.as_str())
         }
-        // serde_json::Value::Object(obj) => format!("{}", obj).blue(),
-        _ => "unknown".yellow(),
+        // Value::Object(obj) => format!("{}", obj).blue(),
+        _ => String::from("unknown"), //.yellow(),
     };
 
-    Ok(&format!("{}", out).as_str())
+    Ok(out)
 }
 
 fn main() {
