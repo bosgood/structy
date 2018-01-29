@@ -46,7 +46,7 @@ fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
     }
 
     // Render timestamp first if present
-    for prop in vec!["time", "timestamp", "date"] {
+    for prop in vec!["time", "timestamp"] {
         let key = String::from(prop);
         if keys.contains(&key) {
             let val = obj.get(&key);
@@ -113,6 +113,13 @@ mod tests {
     #[test]
     fn reformat_obj_with_time() {
         let a = super::reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}").unwrap();
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
+    }
+
+    #[test]
+    fn reformat_obj_with_timestamp() {
+        let a = super::reformat_str("{\"timestamp\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
+            .unwrap();
         assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
     }
 
