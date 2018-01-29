@@ -79,3 +79,12 @@ fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn reformat_obj() {
+        let a = super::reformat_str("{\"a\": 17}").unwrap();
+        assert_eq!(a, "a=17 ");
+    }
+}
