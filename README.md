@@ -1,14 +1,10 @@
 # structy
 
-Structured logging parser. Accepts input from files and stdin.
+Structured logging parser. Accepts input from stdin.
+
+![image](https://user-images.githubusercontent.com/540290/35493594-85e5bc58-0482-11e8-886e-b7e83003b4a7.png)
 
 ## Usage
-
-Run from a file:
-
-```
-structy <file.json>
-```
 
 Run from stdin:
 
