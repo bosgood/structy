@@ -33,8 +33,20 @@ fn reformat_value(val: Value) -> Result<String, Error> {
             buf
             // colored::ColoredString::from(buf.as_str())
         }
-        // Value::Object(obj) => format!("{}", obj).blue(),
-        _ => String::from("unknown"), //.yellow(),
+        Value::Object(obj) => {
+            let mut buf = String::new();
+            for k in obj.keys() {
+                let val = obj.get(k);
+                match val {
+                    Some(v) => {
+                        let formatted = reformat_value(v.clone())?;
+                        buf.push_str(&format!("{k}={v} ", k = k, v = formatted));
+                    }
+                    None => {}
+                }
+            }
+            buf
+        }
     };
 
     Ok(out)
