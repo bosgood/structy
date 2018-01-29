@@ -56,4 +56,22 @@ mod tests {
         let a = super::reformat_str("{\"a\": 17}").unwrap();
         assert_eq!(a, "a=17 ");
     }
+
+    #[test]
+    fn reformat_null() {
+        let a = super::reformat_str("null").unwrap();
+        assert_eq!(a, "null");
+    }
+
+    #[test]
+    fn reformat_number() {
+        let a = super::reformat_str("5").unwrap();
+        assert_eq!(a, "5");
+    }
+
+    #[test]
+    fn reformat_string() {
+        let a = super::reformat_str("\"imma string\"").unwrap();
+        assert_eq!(a, "imma string");
+    }
 }
