@@ -61,6 +61,10 @@ fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
         keys.insert(k);
     }
 
+    let mut has_timestamp = false;
+    let mut has_log_level = false;
+    let mut has_message = false;
+
     // Render timestamp first if present
     for prop in vec!["time", "timestamp"] {
         let key = String::from(prop);
@@ -74,6 +78,7 @@ fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
                             Ok(_d) => {
                                 buf.push_str(&format!("[{}] ", date_string));
                                 keys.remove(&key);
+                                has_timestamp = true;
                             }
                             Err(_) => {}
                         }
@@ -85,30 +90,49 @@ fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
         }
     }
 
-    // Then the log level
-    let level_key = String::from("level");
-    if keys.contains(&level_key) {
-        let val = obj.get(&level_key);
-        match val {
-            Some(v) => match v.clone() {
-                Value::String(lvl_str) => {
-                    let formatted_lvl_str = format_level(lvl_str);
-                    match formatted_lvl_str {
-                        Some(s) => {
-                            buf.push_str(&s);
-                            keys.remove(&level_key);
+    {
+        // Then the log level
+        let level_key = String::from("level");
+        if keys.contains(&level_key) {
+            let val = obj.get(&level_key);
+            match val {
+                Some(v) => match v.clone() {
+                    Value::String(lvl_str) => {
+                        let formatted_lvl_str = format_level(lvl_str);
+                        match formatted_lvl_str {
+                            Some(s) => {
+                                buf.push_str(&s);
+                                keys.remove(&level_key);
+                                has_log_level = true;
+                            }
+                            None => {}
                         }
-                        None => {}
                     }
-                }
-                _ => {}
-            },
-            None => {}
+                    _ => {}
+                },
+                None => {}
+            }
         }
     }
 
-    // Then add the actual log message
-    // vec!["message", "msg"]
+    // Then the log message
+    for prop in vec!["message", "msg"] {
+        let key = String::from(prop);
+        if keys.contains(&key) {
+            let val = obj.get(&key);
+            match val {
+                Some(v) => match v.clone() {
+                    Value::String(s) => {
+                        buf.push_str(&format!("{} ", s));
+                        keys.remove(&key);
+                        has_message = true;
+                    }
+                    _ => {}
+                },
+                None => {}
+            }
+        }
+    }
 
     // Then render the rest of the params
     let mut param_count = 0;
@@ -124,7 +148,7 @@ fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
         }
     }
 
-    if param_count > 0 {
+    if has_timestamp || has_log_level || has_message || param_count > 0 {
         let strlen = buf.len();
         buf.truncate(strlen - 1);
     }
@@ -161,7 +185,7 @@ mod tests {
     #[test]
     fn reformat_obj_with_time_no_params() {
         let a = super::reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\"}").unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z] ");
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z]");
     }
 
     #[test]
@@ -210,6 +234,36 @@ mod tests {
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"a\": 17}",
         ).unwrap();
         assert_eq!(a, "[2018-01-29T00:50:43.176Z] FATAL: a=17");
+    }
+
+    #[test]
+    fn reformat_obj_with_time_message_and_level() {
+        let a = super::reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"it's burning\"}",
+        ).unwrap();
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] FATAL: it's burning");
+    }
+
+    #[test]
+    fn reformat_obj_with_time_message_attr_and_level() {
+        let a = super::reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"something is on fire!\", \"a\": 17}",
+        ).unwrap();
+        assert_eq!(
+            a,
+            "[2018-01-29T00:50:43.176Z] FATAL: something is on fire! a=17"
+        );
+    }
+
+    #[test]
+    fn reformat_obj_with_time_message_attrs_and_level() {
+        let a = super::reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"something is on fire!\", \"a\": 17, \"b\": 18}",
+        ).unwrap();
+        assert_eq!(
+            a,
+            "[2018-01-29T00:50:43.176Z] FATAL: something is on fire! a=17 b=18"
+        );
     }
 
     #[test]
