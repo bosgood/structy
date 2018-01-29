@@ -13,10 +13,10 @@ pub fn reformat_str(input: &str) -> Result<String, Error> {
 
 fn format_value(val: Value) -> Result<String, Error> {
     let out = match val {
-        Value::Number(l) => format!("{}", l), //.green(),
-        Value::Bool(l) => format!("{}", l),   //.green(),
-        Value::Null => String::from("null"),  //.green(),
-        Value::String(l) => format!("{}", l), //.green(),
+        Value::Number(l) => format!("{}", l),
+        Value::Bool(l) => format!("{}", l),
+        Value::Null => String::from("null"),
+        Value::String(l) => format!("{}", l),
         Value::Array(arr) => {
             let mut buf = String::new();
 
@@ -29,7 +29,6 @@ fn format_value(val: Value) -> Result<String, Error> {
             }
             buf.push(']');
             buf
-            // colored::ColoredString::from(buf.as_str())
         }
         Value::Object(obj) => format_obj(obj)?,
     };
@@ -40,16 +39,14 @@ fn format_value(val: Value) -> Result<String, Error> {
 fn format_level(level: String) -> Option<String> {
     let lvl_lower = level.to_lowercase();
 
-    if lvl_lower != "trace" && lvl_lower != "debug" && lvl_lower != "info" && lvl_lower != "warn"
-        && lvl_lower != "error" && lvl_lower != "fatal"
-    {
-        return None;
-    }
-
-    if level.len() == 4 {
-        return Some(format!(" {}: ", level.to_uppercase()));
-    } else {
-        return Some(format!("{}: ", level.to_uppercase()));
+    match lvl_lower.as_str() {
+        "trace" => Some(String::from("TRACE: ")),
+        "debug" => Some(String::from("DEBUG: ")),
+        "info" => Some(String::from(" INFO: ")),
+        "warn" => Some(String::from(" WARN: ")),
+        "error" => Some(String::from("ERROR: ")),
+        "fatal" => Some(String::from("FATAL: ")),
+        _ => None,
     }
 }
 
