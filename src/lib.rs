@@ -77,7 +77,7 @@ fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
                         let datetime = iso8601::datetime(date_string.as_str());
                         match datetime {
                             Ok(_d) => {
-                                buf.push_str(&format!("[{}] ", date_string));
+                                buf.push_str(&format!("[{}] ", date_string.blue().bold()));
                                 keys.remove(&key);
                                 has_timestamp = true;
                             }
@@ -173,20 +173,20 @@ mod tests {
     #[test]
     fn reformat_obj_with_time() {
         let a = super::reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}").unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
+        assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17");
     }
 
     #[test]
     fn reformat_obj_with_timestamp() {
         let a = super::reformat_str("{\"timestamp\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
+        assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17");
     }
 
     #[test]
     fn reformat_obj_with_time_no_params() {
         let a = super::reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\"}").unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z]");
+        assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m]");
     }
 
     #[test]
@@ -194,7 +194,10 @@ mod tests {
         let a = super::reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"trace\", \"a\": 17}",
         ).unwrap();
-        assert_eq!(a, "[2018-01-29T00:50:43.176Z] TRACE: a=17");
+        assert_eq!(
+            a,
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] TRACE: a=17"
+        );
     }
 
     #[test]
@@ -204,7 +207,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] \u{1b}[32mDEBUG\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[32mDEBUG\u{1b}[0m: a=17"
         );
     }
 
@@ -215,7 +218,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] \u{1b}[34m INFO\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[34m INFO\u{1b}[0m: a=17"
         );
     }
 
@@ -226,7 +229,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] \u{1b}[33m WARN\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[33m WARN\u{1b}[0m: a=17"
         );
     }
 
@@ -237,7 +240,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] \u{1b}[31mERROR\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mERROR\u{1b}[0m: a=17"
         );
     }
 
@@ -248,7 +251,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] \u{1b}[31mFATAL\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: a=17"
         );
     }
 
@@ -259,7 +262,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] \u{1b}[31mFATAL\u{1b}[0m: it's burning"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: it's burning"
         );
     }
 
@@ -270,7 +273,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! a=17"
         );
     }
 
@@ -281,7 +284,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[2018-01-29T00:50:43.176Z] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! a=17 b=18"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! a=17 b=18"
         );
     }
 
