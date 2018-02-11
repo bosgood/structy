@@ -2,9 +2,9 @@ extern crate colored;
 extern crate iso8601;
 extern crate serde_json;
 
-use std::collections::BTreeSet;
 use colored::*;
 use serde_json::{Error, Map, Value};
+use std::collections::BTreeSet;
 
 pub fn reformat_str(input: &str) -> Result<String, Error> {
     let val: Value = serde_json::from_str(input)?;
