@@ -154,6 +154,11 @@ impl Formatter {
                 Some(v) => {
                     param_count += 1;
                     let formatted = self.format_value(v.clone())?;
+                    // buf.push_str(&format!(
+                    //     "{k}={v} ",
+                    //     k = k.dimmed().underline(),
+                    //     v = formatted.white(),
+                    // ));
                     buf.push_str(&format!("{k}={v} ", k = k, v = formatted,));
                 }
                 None => {}
