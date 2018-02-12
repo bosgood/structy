@@ -4,17 +4,50 @@ extern crate serde_json;
 
 mod lib;
 
-use std::process;
+use clap::{App, Arg};
 use std::io;
-use clap::App;
+use std::process;
 
 fn main() {
-    App::new("structy")
+    let matches = App::new("structy")
         .about("JSON structured logging parser")
         .version("v0.1.0")
+        .arg(
+            Arg::with_name("no_colors")
+                .long("no-colors")
+                .short("n")
+                .required(false)
+                .help("Disable colorization"),
+        )
+        .arg(
+            Arg::with_name("no_level")
+                .long("no-level")
+                .short("l")
+                .required(false)
+                .help("Disable log level highlighting"),
+        )
+        // .arg(
+        //     Arg::with_name("timestamp_property")
+        //         .long("timestamp-prop")
+        //         .required(false)
+        //         .help("Property to use as a timestamp"),
+        // )
+        // .arg(
+        //     Arg::with_name("highlight_properties")
+        //         .long("highlight-props")
+        //         .short("h")
+        //         .required(false)
+        //         .multiple(true)
+        //         .help("Properties to highlight"),
+        // )
         .get_matches();
 
-    let fmt = lib::Formatter {};
+    let no_colors = matches.is_present("no_colors");
+    let no_level = matches.is_present("no_level");
+    let fmt = lib::Formatter {
+        no_colors: no_colors,
+        no_level: no_level,
+    };
     let mut line = String::new();
 
     loop {
