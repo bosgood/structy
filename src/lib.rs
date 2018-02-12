@@ -10,6 +10,7 @@ pub struct Formatter {
     pub no_colors: bool,
     pub no_level: bool,
     pub parse_depth: u32,
+    pub timestamp_prop: String,
 }
 
 impl Formatter {
@@ -18,6 +19,7 @@ impl Formatter {
             no_colors: false,
             no_level: false,
             parse_depth: 1,
+            timestamp_prop: "".to_string(),
         }
     }
     pub fn reformat_str(&self, input: &str) -> Result<String, Error> {
@@ -101,7 +103,11 @@ impl Formatter {
         let mut has_message = false;
 
         // Render timestamp first if present
-        for prop in vec!["time", "timestamp"] {
+        let mut timestamp_props = vec!["time", "timestamp"];
+        if self.timestamp_prop != "" {
+            timestamp_props = vec![&self.timestamp_prop];
+        }
+        for prop in timestamp_props {
             let key = String::from(prop);
             if keys.contains(&key) {
                 let val = obj.get(&key);
@@ -231,6 +237,27 @@ mod tests {
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
         assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17");
+    }
+
+    #[test]
+    fn reformat_obj_with_time_custom() {
+        let mut fmt = super::Formatter::new();
+        fmt.timestamp_prop = "custom_timestamp".to_string();
+        let a = fmt.reformat_str("{\"custom_timestamp\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
+            .unwrap();
+        assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17");
+    }
+
+    #[test]
+    fn reformat_obj_with_time_and_custom() {
+        let mut fmt = super::Formatter::new();
+        fmt.timestamp_prop = "custom_timestamp".to_string();
+        let a = fmt.reformat_str("{\"custom_timestamp\": \"2018-01-29T00:50:43.176Z\", \"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
+            .unwrap();
+        assert_eq!(
+            a,
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17 time=\"2018-01-29T00:50:43.176Z\""
+        );
     }
 
     #[test]

@@ -34,12 +34,14 @@ fn main() {
                 .takes_value(true)
                 .help("Number of levels deep to parse JSON"),
         )
-        // .arg(
-        //     Arg::with_name("timestamp_property")
-        //         .long("timestamp-prop")
-        //         .required(false)
-        //         .help("Property to use as a timestamp"),
-        // )
+        .arg(
+            Arg::with_name("timestamp_property")
+                .long("timestamp-prop")
+                .short("t")
+                .required(false)
+                .takes_value(true)
+                .help("Property to use as a timestamp"),
+        )
         // .arg(
         //     Arg::with_name("highlight_properties")
         //         .long("highlight-props")
@@ -54,10 +56,12 @@ fn main() {
     let no_level = matches.is_present("no_level");
     let parse_depth_str = matches.value_of("parse_depth").unwrap_or("1");
     let parse_depth: u32 = parse_depth_str.parse().unwrap();
+    let timestamp_prop = matches.value_of("timestamp_property").unwrap_or("");
     let fmt = lib::Formatter {
         no_colors: no_colors,
         no_level: no_level,
         parse_depth: parse_depth,
+        timestamp_prop: timestamp_prop.to_string(),
     };
     let mut line = String::new();
 
