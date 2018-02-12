@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 pub struct Formatter {
     pub no_colors: bool,
     pub no_level: bool,
-    pub nested_json: bool,
+    pub parse_depth: u32,
 }
 
 impl Formatter {
@@ -17,7 +17,7 @@ impl Formatter {
         Formatter {
             no_colors: false,
             no_level: false,
-            nested_json: false,
+            parse_depth: 1,
         }
     }
     pub fn reformat_str(&self, input: &str) -> Result<String, Error> {
@@ -26,7 +26,7 @@ impl Formatter {
     }
 
     fn format_value(&self, val: Value, depth: u32) -> Result<String, Error> {
-        if self.nested_json && depth > 0 {
+        if depth >= self.parse_depth {
             return Ok(val.to_string());
         }
         let out = match val {
@@ -213,6 +213,15 @@ mod tests {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"a\": 17, \"c\": 15, \"d\": \"210\"}")
             .unwrap();
+        assert_eq!(a, "a=17 c=15 d=\"210\"");
+    }
+
+    #[test]
+    fn reformat_obj_multiple_params_parse_depth_2() {
+        let mut fmt = super::Formatter::new();
+        fmt.parse_depth = 2;
+        let a = fmt.reformat_str("{\"a\": 17, \"c\": 15, \"d\": \"210\"}")
+            .unwrap();
         assert_eq!(a, "a=17 c=15 d=210");
     }
 
@@ -281,7 +290,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17 level="
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17 level=\"\""
         );
     }
 
@@ -400,7 +409,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] something is on fire! a=17 level=fatal"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] something is on fire! a=17 level=\"fatal\""
         );
     }
 
@@ -409,7 +418,6 @@ mod tests {
         let mut fmt = super::Formatter::new();
         fmt.no_colors = true;
         fmt.no_level = true;
-        fmt.nested_json = true;
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"a\": 17}",
         ).unwrap();
@@ -421,7 +429,6 @@ mod tests {
         let mut fmt = super::Formatter::new();
         fmt.no_colors = true;
         fmt.no_level = true;
-        fmt.nested_json = true;
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"a\": 17, \"nested\": {\"prop1\": 5}}",
         ).unwrap();
