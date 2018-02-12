@@ -451,6 +451,16 @@ mod tests {
     }
 
     #[test]
+    fn reformat_obj_with_malformed_json() {
+        let fmt = super::Formatter::new();
+        let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\" \"a\": 17}");
+        match a {
+            Ok(_) => assert_eq!("bug: Result was not error", ""),
+            Err(_) => assert_eq!(true, true),
+        }
+    }
+
+    #[test]
     fn reformat_null() {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("null").unwrap();
