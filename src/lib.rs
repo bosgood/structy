@@ -54,7 +54,7 @@ impl Formatter {
         Ok(out)
     }
 
-    fn format_level(&self, level: String) -> Option<String> {
+    fn format_level(&self, level: &str) -> Option<String> {
         let max_len = 5;
         let mut colorized_level = match level.to_lowercase().as_str() {
             "trace" => "TRACE".normal(),
@@ -142,7 +142,7 @@ impl Formatter {
                 match val {
                     Some(v) => match v.clone() {
                         Value::String(lvl_str) => {
-                            let formatted_lvl_str = self.format_level(lvl_str);
+                            let formatted_lvl_str = self.format_level(&lvl_str);
                             match formatted_lvl_str {
                                 Some(s) => {
                                     buf.push_str(&s);
