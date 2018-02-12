@@ -32,10 +32,10 @@ impl Formatter {
             return Ok(val.to_string());
         }
         let out = match val {
-            Value::Number(l) => format!("{}", l),
-            Value::Bool(l) => format!("{}", l),
+            Value::Number(l) => l.to_string(),
+            Value::Bool(l) => l.to_string(),
             Value::Null => String::from("null"),
-            Value::String(l) => format!("{}", l),
+            Value::String(l) => l.to_string(),
             Value::Array(arr) => {
                 let mut buf = String::new();
                 buf.push('[');
@@ -85,9 +85,9 @@ impl Formatter {
 
     fn format_timestamp(&self, timestamp: &str) -> String {
         if self.no_colors {
-            return format!("{}", timestamp);
+            return timestamp.to_string();
         }
-        return format!("{}", timestamp.blue().bold());
+        return timestamp.blue().bold().to_string();
     }
 
     fn format_obj(&self, obj: Map<String, Value>, depth: u32) -> Result<String, Error> {
@@ -186,12 +186,11 @@ impl Formatter {
                 Some(v) => {
                     param_count += 1;
                     let formatted = self.format_value(v.clone(), depth)?;
-                    // buf.push_str(&format!(
-                    //     "{k}={v} ",
-                    //     k = k.dimmed().underline(),
-                    //     v = formatted.white(),
-                    // ));
-                    buf.push_str(&format!("{k}={v} ", k = k, v = formatted,));
+                    buf.push_str(&format!(
+                        "{k}={v} ",
+                        k = self.colorize_obj_key(k),
+                        v = self.colorize_obj_value(&formatted),
+                    ));
                 }
                 None => {}
             }
@@ -203,28 +202,60 @@ impl Formatter {
         }
         Ok(buf)
     }
+
+    fn colorize_obj_key(&self, key: &str) -> String {
+        if self.no_colors {
+            return key.to_string();
+        }
+        return key.dimmed().underline().to_string();
+    }
+
+    fn colorize_obj_value(&self, val: &str) -> String {
+        if self.no_colors {
+            return val.to_string();
+        }
+        return val.white().to_string();
+    }
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn reformat_obj_one_param() {
-        let fmt = super::Formatter::new();
+        let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
         let a = fmt.reformat_str("{\"a\": 17}").unwrap();
         assert_eq!(a, "a=17");
     }
 
     #[test]
-    fn reformat_obj_multiple_params() {
+    fn reformat_obj_one_param_color() {
         let fmt = super::Formatter::new();
+        let a = fmt.reformat_str("{\"a\": 17}").unwrap();
+        assert_eq!(a, "\u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m");
+    }
+
+    #[test]
+    fn reformat_obj_multiple_params() {
+        let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
         let a = fmt.reformat_str("{\"a\": 17, \"c\": 15, \"d\": \"210\"}")
             .unwrap();
         assert_eq!(a, "a=17 c=15 d=\"210\"");
     }
 
     #[test]
+    fn reformat_obj_multiple_params_color() {
+        let fmt = super::Formatter::new();
+        let a = fmt.reformat_str("{\"a\": 17, \"c\": 15, \"d\": \"210\"}")
+            .unwrap();
+        assert_eq!(a, "\u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m \u{1b}[2;4mc\u{1b}[0m=\u{1b}[37m15\u{1b}[0m \u{1b}[2;4md\u{1b}[0m=\u{1b}[37m\"210\"\u{1b}[0m");
+    }
+
+    #[test]
     fn reformat_obj_multiple_params_parse_depth_2() {
         let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
         fmt.parse_depth = 2;
         let a = fmt.reformat_str("{\"a\": 17, \"c\": 15, \"d\": \"210\"}")
             .unwrap();
@@ -233,30 +264,41 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time() {
+        let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
+        let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
+            .unwrap();
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
+    }
+
+    #[test]
+    fn reformat_obj_with_time_color() {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
-        assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17");
+        assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m");
     }
 
     #[test]
     fn reformat_obj_with_time_custom() {
         let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
         fmt.timestamp_prop = "custom_timestamp".to_string();
         let a = fmt.reformat_str("{\"custom_timestamp\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
-        assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17");
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
     }
 
     #[test]
     fn reformat_obj_with_time_and_custom() {
         let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
         fmt.timestamp_prop = "custom_timestamp".to_string();
-        let a = fmt.reformat_str("{\"custom_timestamp\": \"2018-01-29T00:50:43.176Z\", \"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
+        let a = fmt.reformat_str("{\"custom_timestamp\": \"2018-01-29T00:50:43.500Z\", \"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17 time=\"2018-01-29T00:50:43.176Z\""
+            "[2018-01-29T00:50:43.500Z] a=17 time=\"2018-01-29T00:50:43.176Z\""
         );
     }
 
@@ -271,10 +313,11 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_timestamp() {
-        let fmt = super::Formatter::new();
+        let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
         let a = fmt.reformat_str("{\"timestamp\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
-        assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17");
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
     }
 
     #[test]
@@ -293,7 +336,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] TRACE: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] TRACE: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
     }
 
@@ -305,20 +348,18 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] UNKNO: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] UNKNO: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
     }
 
     #[test]
     fn reformat_obj_with_time_and_level_blank() {
-        let fmt = super::Formatter::new();
+        let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"\", \"a\": 17}",
         ).unwrap();
-        assert_eq!(
-            a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17 level=\"\""
-        );
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17 level=\"\"");
     }
 
     #[test]
@@ -329,7 +370,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m]   SHA: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m]   SHA: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
     }
 
@@ -341,7 +382,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[32mDEBUG\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[32mDEBUG\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
     }
 
@@ -363,7 +404,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[34m INFO\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[34m INFO\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
     }
 
@@ -375,7 +416,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[33m WARN\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[33m WARN\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
     }
 
@@ -387,7 +428,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mERROR\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mERROR\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
     }
 
@@ -399,7 +440,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
     }
 
@@ -423,7 +464,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! a=17"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
     }
 
@@ -431,12 +472,13 @@ mod tests {
     fn reformat_obj_with_time_message_attr_and_no_level() {
         let mut fmt = super::Formatter::new();
         fmt.no_level = true;
+        fmt.no_colors = true;
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"something is on fire!\", \"a\": 17}",
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] something is on fire! a=17 level=\"fatal\""
+            "[2018-01-29T00:50:43.176Z] something is on fire! a=17 level=\"fatal\""
         );
     }
 
@@ -473,7 +515,7 @@ mod tests {
         ).unwrap();
         assert_eq!(
             a,
-            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! a=17 b=18"
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m \u{1b}[2;4mb\u{1b}[0m=\u{1b}[37m18\u{1b}[0m"
         );
     }
 
