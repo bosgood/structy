@@ -6,9 +6,18 @@ use colored::*;
 use serde_json::{Error, Map, Value};
 use std::collections::BTreeSet;
 
-pub struct Formatter {}
+pub struct Formatter {
+    pub no_colors: bool,
+    pub no_level: bool,
+}
 
 impl Formatter {
+    pub fn new() -> Formatter {
+        Formatter {
+            no_colors: false,
+            no_level: false,
+        }
+    }
     pub fn reformat_str(&self, input: &str) -> Result<String, Error> {
         let val: Value = serde_json::from_str(input)?;
         return self.format_value(val);
@@ -65,6 +74,13 @@ impl Formatter {
         Some(format!("{}: ", colorized_level))
     }
 
+    fn format_timestamp(&self, timestamp: &str) -> String {
+        if self.no_colors {
+            return format!("{}", timestamp);
+        }
+        return format!("{}", timestamp.blue().bold());
+    }
+
     fn format_obj(&self, obj: Map<String, Value>) -> Result<String, Error> {
         let mut buf = String::new();
         let mut keys = BTreeSet::new();
@@ -88,7 +104,10 @@ impl Formatter {
                             let datetime = iso8601::datetime(date_string.as_str());
                             match datetime {
                                 Ok(_d) => {
-                                    buf.push_str(&format!("[{}] ", date_string.blue().bold()));
+                                    buf.push_str(&format!(
+                                        "[{}] ",
+                                        self.format_timestamp(&date_string)
+                                    ));
                                     keys.remove(&key);
                                     has_timestamp = true;
                                 }
@@ -177,14 +196,14 @@ impl Formatter {
 mod tests {
     #[test]
     fn reformat_obj_one_param() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"a\": 17}").unwrap();
         assert_eq!(a, "a=17");
     }
 
     #[test]
     fn reformat_obj_multiple_params() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"a\": 17, \"c\": 15, \"d\": \"210\"}")
             .unwrap();
         assert_eq!(a, "a=17 c=15 d=210");
@@ -192,7 +211,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
         assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17");
@@ -200,7 +219,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_timestamp() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"timestamp\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
         assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17");
@@ -208,7 +227,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_no_params() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\"}")
             .unwrap();
         assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m]");
@@ -216,7 +235,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_and_level_trace() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"trace\", \"a\": 17}",
         ).unwrap();
@@ -228,7 +247,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_and_level_unknown() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"unknown\", \"a\": 17}",
         ).unwrap();
@@ -240,7 +259,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_and_level_blank() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"\", \"a\": 17}",
         ).unwrap();
@@ -252,7 +271,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_and_level_short() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"sha\", \"a\": 17}",
         ).unwrap();
@@ -264,7 +283,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_and_level_debug() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"debug\", \"a\": 17}",
         ).unwrap();
@@ -276,7 +295,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_and_level_info() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"info\", \"a\": 17}",
         ).unwrap();
@@ -288,7 +307,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_and_level_warn() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"warn\", \"a\": 17}",
         ).unwrap();
@@ -300,7 +319,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_and_level_error() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"error\", \"a\": 17}",
         ).unwrap();
@@ -312,7 +331,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_and_level_fatal() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"a\": 17}",
         ).unwrap();
@@ -324,7 +343,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_message_and_level() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"it's burning\"}",
         ).unwrap();
@@ -336,7 +355,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_message_attr_and_level() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"something is on fire!\", \"a\": 17}",
         ).unwrap();
@@ -348,7 +367,7 @@ mod tests {
 
     #[test]
     fn reformat_obj_with_time_message_attrs_and_level() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"something is on fire!\", \"a\": 17, \"b\": 18}",
         ).unwrap();
@@ -360,21 +379,21 @@ mod tests {
 
     #[test]
     fn reformat_null() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str("null").unwrap();
         assert_eq!(a, "null");
     }
 
     #[test]
     fn reformat_number() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str("5").unwrap();
         assert_eq!(a, "5");
     }
 
     #[test]
     fn reformat_string() {
-        let fmt = super::Formatter {};
+        let fmt = super::Formatter::new();
         let a = fmt.reformat_str("\"imma string\"").unwrap();
         assert_eq!(a, "imma string");
     }
