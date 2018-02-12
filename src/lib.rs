@@ -50,7 +50,7 @@ impl Formatter {
 
     fn format_level(&self, level: String) -> Option<String> {
         let max_len = 5;
-        let colorized_level = match level.to_lowercase().as_str() {
+        let mut colorized_level = match level.to_lowercase().as_str() {
             "trace" => "TRACE".normal(),
             "debug" => "DEBUG".green(),
             "info" => " INFO".blue(),
@@ -67,6 +67,9 @@ impl Formatter {
                 lvl_upper.normal()
             }
         };
+        if self.no_colors {
+            colorized_level = colorized_level.normal();
+        }
 
         if colorized_level == "     ".normal() {
             return None;
@@ -121,7 +124,7 @@ impl Formatter {
             }
         }
 
-        {
+        if !self.no_level {
             // Then the log level
             let level_key = String::from("level");
             if keys.contains(&level_key) {
@@ -218,6 +221,15 @@ mod tests {
     }
 
     #[test]
+    fn reformat_obj_with_time_no_colors() {
+        let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
+        let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
+            .unwrap();
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
+    }
+
+    #[test]
     fn reformat_obj_with_timestamp() {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"timestamp\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
@@ -294,6 +306,16 @@ mod tests {
     }
 
     #[test]
+    fn reformat_obj_with_time_and_level_debug_no_colors() {
+        let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
+        let a = fmt.reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"debug\", \"a\": 17}",
+        ).unwrap();
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] DEBUG: a=17");
+    }
+
+    #[test]
     fn reformat_obj_with_time_and_level_info() {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str(
@@ -362,6 +384,19 @@ mod tests {
         assert_eq!(
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! a=17"
+        );
+    }
+
+    #[test]
+    fn reformat_obj_with_time_message_attr_and_no_level() {
+        let mut fmt = super::Formatter::new();
+        fmt.no_level = true;
+        let a = fmt.reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"something is on fire!\", \"a\": 17}",
+        ).unwrap();
+        assert_eq!(
+            a,
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] something is on fire! a=17 level=fatal"
         );
     }
 
