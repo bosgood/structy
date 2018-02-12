@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 pub struct Formatter {
     pub no_colors: bool,
     pub no_level: bool,
+    pub nested_json: bool,
 }
 
 impl Formatter {
@@ -16,14 +17,18 @@ impl Formatter {
         Formatter {
             no_colors: false,
             no_level: false,
+            nested_json: false,
         }
     }
     pub fn reformat_str(&self, input: &str) -> Result<String, Error> {
         let val: Value = serde_json::from_str(input)?;
-        return self.format_value(val);
+        return self.format_value(val, 0);
     }
 
-    fn format_value(&self, val: Value) -> Result<String, Error> {
+    fn format_value(&self, val: Value, depth: u32) -> Result<String, Error> {
+        if self.nested_json && depth > 0 {
+            return Ok(val.to_string());
+        }
         let out = match val {
             Value::Number(l) => format!("{}", l),
             Value::Bool(l) => format!("{}", l),
@@ -31,18 +36,17 @@ impl Formatter {
             Value::String(l) => format!("{}", l),
             Value::Array(arr) => {
                 let mut buf = String::new();
-
                 buf.push('[');
                 for (i, item) in arr.iter().enumerate() {
                     if i > 0 {
                         buf.push(' ');
                     }
-                    buf.push_str(&self.format_value(item.clone())?);
+                    buf.push_str(&self.format_value(item.clone(), depth + 1)?);
                 }
                 buf.push(']');
                 buf
             }
-            Value::Object(obj) => self.format_obj(obj)?,
+            Value::Object(obj) => self.format_obj(obj, depth + 1)?,
         };
 
         Ok(out)
@@ -84,7 +88,7 @@ impl Formatter {
         return format!("{}", timestamp.blue().bold());
     }
 
-    fn format_obj(&self, obj: Map<String, Value>) -> Result<String, Error> {
+    fn format_obj(&self, obj: Map<String, Value>, depth: u32) -> Result<String, Error> {
         let mut buf = String::new();
         let mut keys = BTreeSet::new();
 
@@ -175,7 +179,7 @@ impl Formatter {
             match val {
                 Some(v) => {
                     param_count += 1;
-                    let formatted = self.format_value(v.clone())?;
+                    let formatted = self.format_value(v.clone(), depth)?;
                     // buf.push_str(&format!(
                     //     "{k}={v} ",
                     //     k = k.dimmed().underline(),
@@ -397,6 +401,33 @@ mod tests {
         assert_eq!(
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] something is on fire! a=17 level=fatal"
+        );
+    }
+
+    #[test]
+    fn reformat_obj_with_time_message_attr_and_no_level_nested_json() {
+        let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
+        fmt.no_level = true;
+        fmt.nested_json = true;
+        let a = fmt.reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"a\": 17}",
+        ).unwrap();
+        assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17 level=\"fatal\"");
+    }
+
+    #[test]
+    fn reformat_obj_with_time_message_attr_and_no_level_nested_json2() {
+        let mut fmt = super::Formatter::new();
+        fmt.no_colors = true;
+        fmt.no_level = true;
+        fmt.nested_json = true;
+        let a = fmt.reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"a\": 17, \"nested\": {\"prop1\": 5}}",
+        ).unwrap();
+        assert_eq!(
+            a,
+            "[2018-01-29T00:50:43.176Z] a=17 level=\"fatal\" nested={\"prop1\":5}"
         );
     }
 

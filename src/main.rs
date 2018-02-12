@@ -26,6 +26,13 @@ fn main() {
                 .required(false)
                 .help("Disable log level highlighting"),
         )
+        .arg(
+            Arg::with_name("nested_json")
+                .long("nested-json")
+                .short("j")
+                .required(false)
+                .help("Output all sub-properties as JSON"),
+        )
         // .arg(
         //     Arg::with_name("timestamp_property")
         //         .long("timestamp-prop")
@@ -44,9 +51,11 @@ fn main() {
 
     let no_colors = matches.is_present("no_colors");
     let no_level = matches.is_present("no_level");
+    let nested_json = matches.is_present("nested_json");
     let fmt = lib::Formatter {
         no_colors: no_colors,
         no_level: no_level,
+        nested_json: nested_json,
     };
     let mut line = String::new();
 
