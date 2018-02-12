@@ -11,6 +11,8 @@ pub struct Formatter {
     pub no_level: bool,
     pub parse_depth: u32,
     pub timestamp_prop: String,
+    pub highlight_properties: Vec<String>,
+    highlight_properties_set: BTreeSet<String>,
 }
 
 impl Formatter {
@@ -20,8 +22,32 @@ impl Formatter {
             no_level: false,
             parse_depth: 1,
             timestamp_prop: "".to_string(),
+            highlight_properties: vec![],
+            highlight_properties_set: BTreeSet::new(),
         }
     }
+
+    pub fn new_with_params(
+        no_colors: bool,
+        no_level: bool,
+        parse_depth: u32,
+        timestamp_prop: String,
+        highlight_properties: Vec<String>,
+    ) -> Formatter {
+        let mut prop_set = BTreeSet::new();
+        for prop in &highlight_properties {
+            prop_set.insert(prop.to_string());
+        }
+        Formatter {
+            no_colors: no_colors,
+            no_level: no_level,
+            parse_depth: parse_depth,
+            timestamp_prop: timestamp_prop,
+            highlight_properties: highlight_properties,
+            highlight_properties_set: prop_set,
+        }
+    }
+
     pub fn reformat_str(&self, input: &str) -> Result<String, Error> {
         let val: Value = serde_json::from_str(input)?;
         return self.format_value(val, 0);
@@ -206,6 +232,9 @@ impl Formatter {
     fn colorize_obj_key(&self, key: &str) -> String {
         if self.no_colors {
             return key.to_string();
+        }
+        if self.highlight_properties_set.contains(&key.to_string()) {
+            return key.yellow().underline().to_string();
         }
         return key.dimmed().underline().to_string();
     }
@@ -516,6 +545,35 @@ mod tests {
         assert_eq!(
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m \u{1b}[2;4mb\u{1b}[0m=\u{1b}[37m18\u{1b}[0m"
+        );
+    }
+
+    #[test]
+    fn reformat_obj_with_time_message_attrs_and_level_highlight_property() {
+        let mut fmt = super::Formatter::new();
+        fmt.highlight_properties_set = super::BTreeSet::new();
+        fmt.highlight_properties_set.insert("b".to_string());
+        let a = fmt.reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"something is on fire!\", \"a\": 17, \"b\": 18}",
+        ).unwrap();
+        assert_eq!(
+            a,
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m \u{1b}[4;33mb\u{1b}[0m=\u{1b}[37m18\u{1b}[0m"
+        );
+    }
+
+    #[test]
+    fn reformat_obj_with_time_message_attrs_and_level_highlight_properties() {
+        let mut fmt = super::Formatter::new();
+        fmt.highlight_properties_set = super::BTreeSet::new();
+        fmt.highlight_properties_set.insert("a".to_string());
+        fmt.highlight_properties_set.insert("b".to_string());
+        let a = fmt.reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"message\": \"something is on fire!\", \"a\": 17, \"b\": 18}",
+        ).unwrap();
+        assert_eq!(
+            a,
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! \u{1b}[4;33ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m \u{1b}[4;33mb\u{1b}[0m=\u{1b}[37m18\u{1b}[0m"
         );
     }
 

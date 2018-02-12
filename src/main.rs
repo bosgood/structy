@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate clap;
 extern crate colored;
 extern crate serde_json;
@@ -42,14 +43,15 @@ fn main() {
                 .takes_value(true)
                 .help("Property to use as a timestamp"),
         )
-        // .arg(
-        //     Arg::with_name("highlight_properties")
-        //         .long("highlight-props")
-        //         .short("h")
-        //         .required(false)
-        //         .multiple(true)
-        //         .help("Properties to highlight"),
-        // )
+        .arg(
+            Arg::with_name("highlight_properties")
+                .long("highlight-props")
+                .short("h")
+                .required(false)
+                .multiple(true)
+                .takes_value(true)
+                .help("Properties to highlight"),
+        )
         .get_matches();
 
     let no_colors = matches.is_present("no_colors");
@@ -57,14 +59,28 @@ fn main() {
     let parse_depth_str = matches.value_of("parse_depth").unwrap_or("1");
     let parse_depth: u32 = parse_depth_str.parse().unwrap();
     let timestamp_prop = matches.value_of("timestamp_property").unwrap_or("");
-    let fmt = lib::Formatter {
-        no_colors: no_colors,
-        no_level: no_level,
-        parse_depth: parse_depth,
-        timestamp_prop: timestamp_prop.to_string(),
-    };
-    let mut line = String::new();
 
+    let highlight_properties_vals = values_t!(matches.values_of("highlight_properties"), String);
+    let highlight_properties: Vec<String> = match highlight_properties_vals {
+        Ok(props) => {
+            let mut prop_list: Vec<String> = vec![];
+            for prop in props {
+                prop_list.push(prop.to_string());
+            }
+            prop_list
+        }
+        Err(_) => vec![],
+    };
+
+    let fmt = lib::Formatter::new_with_params(
+        no_colors,
+        no_level,
+        parse_depth,
+        timestamp_prop.to_string(),
+        highlight_properties,
+    );
+
+    let mut line = String::new();
     loop {
         match io::stdin().read_line(&mut line) {
             Ok(n) => {
