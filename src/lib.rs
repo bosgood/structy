@@ -37,21 +37,29 @@ fn format_value(val: Value) -> Result<String, Error> {
 }
 
 fn format_level(level: String) -> Option<String> {
-    let lvl_lower = level.to_lowercase();
-
-    let xxx = match lvl_lower.as_str() {
+    let max_len = 5;
+    let colorized_level = match level.to_lowercase().as_str() {
         "trace" => "TRACE".normal(),
         "debug" => "DEBUG".green(),
         "info" => " INFO".blue(),
         "warn" => " WARN".yellow(),
         "error" => "ERROR".red(),
         "fatal" => "FATAL".red(),
-        _ => "".normal(),
+        _ => {
+            let mut lvl_upper = level.to_uppercase();
+            if level.len() > max_len {
+                lvl_upper = lvl_upper[..max_len].to_string();
+            } else if level.len() < max_len {
+                lvl_upper = format!("{:>width$}", lvl_upper, width = max_len)
+            }
+            lvl_upper.normal()
+        }
     };
-    if xxx == "".normal() {
+
+    if colorized_level == "     ".normal() {
         return None;
     }
-    Some(format!("{}: ", xxx))
+    Some(format!("{}: ", colorized_level))
 }
 
 fn format_obj(obj: Map<String, Value>) -> Result<String, Error> {
@@ -197,6 +205,39 @@ mod tests {
         assert_eq!(
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] TRACE: a=17"
+        );
+    }
+
+    #[test]
+    fn reformat_obj_with_time_and_level_unknown() {
+        let a = super::reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"unknown\", \"a\": 17}",
+        ).unwrap();
+        assert_eq!(
+            a,
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] UNKNO: a=17"
+        );
+    }
+
+    #[test]
+    fn reformat_obj_with_time_and_level_blank() {
+        let a = super::reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"\", \"a\": 17}",
+        ).unwrap();
+        assert_eq!(
+            a,
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] a=17 level="
+        );
+    }
+
+    #[test]
+    fn reformat_obj_with_time_and_level_short() {
+        let a = super::reformat_str(
+            "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"sha\", \"a\": 17}",
+        ).unwrap();
+        assert_eq!(
+            a,
+            "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m]   SHA: a=17"
         );
     }
 
