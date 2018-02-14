@@ -16,6 +16,7 @@ pub struct Formatter {
 }
 
 impl Formatter {
+    #[test]
     pub fn new() -> Formatter {
         Formatter {
             no_colors: false,
@@ -49,8 +50,10 @@ impl Formatter {
     }
 
     pub fn reformat_str(&self, input: &str) -> Result<String, Error> {
-        let val: Value = serde_json::from_str(input)?;
-        return self.format_value(val, 0);
+        return match serde_json::from_str(input) {
+            Ok(val) => self.format_value(val, 0),
+            _ => Ok(input.to_string()),
+        };
     }
 
     fn format_value(&self, val: Value, depth: u32) -> Result<String, Error> {
@@ -578,16 +581,6 @@ mod tests {
     }
 
     #[test]
-    fn reformat_obj_with_malformed_json() {
-        let fmt = super::Formatter::new();
-        let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\" \"a\": 17}");
-        match a {
-            Ok(_) => assert_eq!("bug: Result was not error", ""),
-            Err(_) => assert_eq!(true, true),
-        }
-    }
-
-    #[test]
     fn reformat_null() {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("null").unwrap();
@@ -606,5 +599,22 @@ mod tests {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("\"imma string\"").unwrap();
         assert_eq!(a, "imma string");
+    }
+
+    #[test]
+    fn reformat_unparsable_string() {
+        let fmt = super::Formatter::new();
+        let a = fmt.reformat_str("{").unwrap();
+        assert_eq!(a, "{");
+    }
+
+    #[test]
+    fn reformat_obj_with_malformed_json() {
+        let fmt = super::Formatter::new();
+        let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\" \"a\": 17}");
+        match a {
+            Ok(_) => assert_eq!(true, true),
+            Err(_) => assert_eq!("bug!", ""),
+        }
     }
 }
