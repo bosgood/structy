@@ -12,7 +12,7 @@ use std::process;
 fn main() {
     let matches = App::new("structy")
         .about("JSON structured logging parser")
-        .version("v0.2.0")
+        .version("v0.3.0")
         .arg(
             Arg::with_name("no_colors")
                 .long("no-colors")
