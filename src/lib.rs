@@ -49,7 +49,7 @@ impl Formatter {
     pub fn reformat_str(&self, input: &str) -> Result<String, Error> {
         return match serde_json::from_str(input) {
             Ok(val) => Ok(self.format_value(val, 0)),
-            _ => Ok(input.to_string()),
+            Err(err) => Err(err),
         };
     }
 
@@ -598,18 +598,15 @@ mod tests {
     #[test]
     fn reformat_unparsable_string() {
         let fmt = super::Formatter::new();
-        let a = fmt.reformat_str("{").unwrap();
-        assert_eq!(a, "{");
+        let a = fmt.reformat_str("{");
+        assert!(a.is_err());
     }
 
     #[test]
     fn reformat_obj_with_malformed_json() {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\" \"a\": 17}");
-        match a {
-            Ok(_) => assert_eq!(true, true),
-            Err(_) => assert_eq!("bug!", ""),
-        }
+        assert!(a.is_err())
     }
 
     #[test]

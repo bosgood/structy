@@ -83,7 +83,7 @@ fn main() {
                 }
                 match fmt.reformat_str(&line) {
                     Ok(l) => println!("{}", l),
-                    Err(error) => println!("parsing error: {}", error),
+                    Err(_) => print!("{}", line),
                 }
 
                 line.clear();
