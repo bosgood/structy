@@ -62,13 +62,7 @@ fn main() {
 
     let highlight_properties_vals = values_t!(matches.values_of("highlight_properties"), String);
     let highlight_properties: Vec<String> = match highlight_properties_vals {
-        Ok(props) => {
-            let mut prop_list: Vec<String> = vec![];
-            for prop in props {
-                prop_list.push(prop.to_string());
-            }
-            prop_list
-        }
+        Ok(props) => props.iter().map(|p| p.to_string()).collect(),
         Err(_) => vec![],
     };
 
