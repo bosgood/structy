@@ -4,6 +4,7 @@ extern crate serde_json;
 
 use colored::*;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Formatter {
@@ -110,6 +111,13 @@ impl Formatter {
         }
         return val.white().to_string();
     }
+
+    fn timestamp_props(&self) -> Vec<&str> {
+        if self.timestamp_prop != "" {
+            return vec![&self.timestamp_prop];
+        }
+        vec!["time", "timestamp"]
+    }
 }
 
 trait Formattable {
@@ -121,7 +129,7 @@ impl Formattable for serde_json::Value {
         if depth >= fmt.parse_depth {
             return self.to_string();
         }
-        let out = match *self {
+        match *self {
             serde_json::Value::Number(ref l) => l.to_string(),
             serde_json::Value::Bool(ref l) => l.to_string(),
             serde_json::Value::Null => String::from("null"),
@@ -133,9 +141,129 @@ impl Formattable for serde_json::Value {
                 format!("[{}]", values.join(", "))
             }
             serde_json::Value::Object(ref obj) => obj.format(fmt.clone(), depth + 1),
-        };
+        }
+    }
+}
 
-        out
+trait Hashable<K, V> {
+    fn get_string(&self, key: &str) -> Option<&V>;
+    fn keys(&self) -> Iterator<K, V>;
+}
+
+impl Formattable for Hashable {
+    fn format(&self, fmt: Formatter, depth: u32) -> String {
+        let mut buf = String::new();
+        let mut keys = BTreeSet::new();
+
+        for k in self.keys_iter() {
+            keys.insert(k);
+        }
+
+        let mut has_timestamp = false;
+        let mut has_log_level = false;
+        let mut has_message = false;
+
+        // Render timestamp first if present
+        for prop in fmt.timestamp_props() {
+            let key = String::from(prop);
+            if keys.contains(&key) {
+                let val = self.get_string(&key);
+                match val {
+                    Some(date_str) => {
+                        let datetime = iso8601::datetime(date_str.as_str());
+                        match datetime {
+                            Ok(_d) => {
+                                buf.push_str(&format!("[{}] ", fmt.format_timestamp(&date_str)));
+                                keys.remove(&key);
+                                has_timestamp = true;
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        if !fmt.no_level {
+            // Then the log level
+            let level_key = String::from("level");
+            if keys.contains(&level_key) {
+                let val = self.get_string(&level_key);
+                match val {
+                    Some(lvl_str) => {
+                        let formatted_lvl_str = fmt.format_level(&lvl_str);
+                        match formatted_lvl_str {
+                            Some(s) => {
+                                buf.push_str(&s);
+                                keys.remove(&level_key);
+                                has_log_level = true;
+                            }
+                            None => {}
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        // Then the log message
+        for prop in vec!["message", "msg"] {
+            let key = String::from(prop);
+            if keys.contains(&key) {
+                let val = self.get_string(&key);
+                match val {
+                    Some(s) => {
+                        buf.push_str(&format!("{} ", s));
+                        keys.remove(&key);
+                        has_message = true;
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        // Then render the rest of the params
+        let mut param_count = 0;
+        // for k in keys {
+        //     let val = self.get(k);
+        //     match val {
+        //         Some(v) => {
+        //             param_count += 1;
+        //             let formatted = v.clone().format(fmt.clone(), depth);
+        //             buf.push_str(&format!(
+        //                 "{k}={v} ",
+        //                 k = fmt.colorize_obj_key(k),
+        //                 v = fmt.colorize_obj_value(&formatted),
+        //             ));
+        //         }
+        //         None => {}
+        //     }
+        // }
+
+        if has_timestamp || has_log_level || has_message || param_count > 0 {
+            let strlen = buf.len();
+            buf.truncate(strlen - 1);
+        }
+        buf
+    }
+}
+
+impl Hashable<String, serde_json::Value> for serde_json::Map<String, serde_json::Value> {
+    fn get_string(&self, key: &str) -> Option<&String> {
+        match self.get(key) {
+            Some(v) => match v {
+                &serde_json::Value::String(ref s) => return Some(s),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+
+impl Hashable for HashMap<String, String> {
+    fn get_string(&self, key: &str) -> Option<&String> {
+        self.get(key)
     }
 }
 
@@ -153,11 +281,7 @@ impl Formattable for serde_json::Map<String, serde_json::Value> {
         let mut has_message = false;
 
         // Render timestamp first if present
-        let mut timestamp_props = vec!["time", "timestamp"];
-        if fmt.timestamp_prop != "" {
-            timestamp_props = vec![&fmt.timestamp_prop];
-        }
-        for prop in timestamp_props {
+        for prop in fmt.timestamp_props() {
             let key = String::from(prop);
             if keys.contains(&key) {
                 let val = self.get(&key);
@@ -254,6 +378,12 @@ impl Formattable for serde_json::Map<String, serde_json::Value> {
     }
 }
 
+impl Formattable for HashMap<String, String> {
+    fn format(&self, fmt: Formatter, depth: u32) -> String {
+        return String::from("");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -262,6 +392,9 @@ mod tests {
         fmt.no_colors = true;
         let a = fmt.reformat_str("{\"a\": 17}").unwrap();
         assert_eq!(a, "a=17");
+
+        let b = fmt.reformat_str("a=17").unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -269,6 +402,9 @@ mod tests {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"a\": 17}").unwrap();
         assert_eq!(a, "\u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m");
+
+        let b = fmt.reformat_str("a=17").unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -278,6 +414,9 @@ mod tests {
         let a = fmt.reformat_str("{\"a\": 17, \"c\": 15, \"d\": \"210\"}")
             .unwrap();
         assert_eq!(a, "a=17 c=15 d=\"210\"");
+
+        let b = fmt.reformat_str("a=17 c=15 d=\"210\"").unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -286,6 +425,9 @@ mod tests {
         let a = fmt.reformat_str("{\"a\": 17, \"c\": 15, \"d\": \"210\"}")
             .unwrap();
         assert_eq!(a, "\u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m \u{1b}[2;4mc\u{1b}[0m=\u{1b}[37m15\u{1b}[0m \u{1b}[2;4md\u{1b}[0m=\u{1b}[37m\"210\"\u{1b}[0m");
+
+        let b = fmt.reformat_str("a=17 c=15 d=\"210\"").unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -305,6 +447,10 @@ mod tests {
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
         assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -313,6 +459,10 @@ mod tests {
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
         assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m");
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -323,6 +473,10 @@ mod tests {
         let a = fmt.reformat_str("{\"custom_timestamp\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
         assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
+
+        let b = fmt.reformat_str("custom_timestamp=\"2018-01-29T00:50:43.176Z\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -336,6 +490,11 @@ mod tests {
             a,
             "[2018-01-29T00:50:43.500Z] a=17 time=\"2018-01-29T00:50:43.176Z\""
         );
+
+        let b = fmt.reformat_str(
+            "custom_timestamp=\"2018-01-29T00:50:43.500Z\" time=\"2018-01-29T00:50:43.176Z\" a=17",
+        ).unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -345,6 +504,10 @@ mod tests {
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
         assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -354,6 +517,10 @@ mod tests {
         let a = fmt.reformat_str("{\"timestamp\": \"2018-01-29T00:50:43.176Z\", \"a\": 17}")
             .unwrap();
         assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17");
+
+        let b = fmt.reformat_str("timestamp=\"2018-01-29T00:50:43.176Z\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -362,6 +529,10 @@ mod tests {
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\"}")
             .unwrap();
         assert_eq!(a, "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m]");
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\"")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -374,6 +545,14 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] TRACE: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=trace a=17")
+            .unwrap();
+        assert_eq!(a, b);
+
+        let c = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"trace\" a=17")
+            .unwrap();
+        assert_eq!(a, c);
     }
 
     #[test]
@@ -386,6 +565,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] UNKNO: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=unknown a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -396,6 +579,10 @@ mod tests {
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"\", \"a\": 17}",
         ).unwrap();
         assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17 level=\"\"");
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -408,6 +595,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m]   SHA: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"sha\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -420,6 +611,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[32mDEBUG\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"debug\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -430,6 +625,10 @@ mod tests {
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"debug\", \"a\": 17}",
         ).unwrap();
         assert_eq!(a, "[2018-01-29T00:50:43.176Z] DEBUG: a=17");
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"debug\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -442,6 +641,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[34m INFO\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"info\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -454,6 +657,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[33m WARN\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"warn\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -466,6 +673,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mERROR\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"error\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -478,6 +689,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"fatal\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -490,6 +705,11 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: it's burning"
         );
+
+        let b = fmt.reformat_str(
+            "time=\"2018-01-29T00:50:43.176Z\" level=\"fatal\" message=\"it's burning\"",
+        ).unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -502,6 +722,11 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str(
+            "time=\"2018-01-29T00:50:43.176Z\" level=\"fatal\" message=\"something is on fire!\" a=17",
+        ).unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -516,6 +741,11 @@ mod tests {
             a,
             "[2018-01-29T00:50:43.176Z] something is on fire! a=17 level=\"fatal\""
         );
+
+        let b = fmt.reformat_str(
+            "time=\"2018-01-29T00:50:43.176Z\" level=\"fatal\" message=\"something is on fire!\"",
+        ).unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -527,6 +757,10 @@ mod tests {
             "{\"time\": \"2018-01-29T00:50:43.176Z\", \"level\": \"fatal\", \"a\": 17}",
         ).unwrap();
         assert_eq!(a, "[2018-01-29T00:50:43.176Z] a=17 level=\"fatal\"");
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"fatal\" a=17")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -553,6 +787,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m \u{1b}[2;4mb\u{1b}[0m=\u{1b}[37m18\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"fatal\" message=\"something is on fire!\" a=17 b=18")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -567,6 +805,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! \u{1b}[2;4ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m \u{1b}[4;33mb\u{1b}[0m=\u{1b}[37m18\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"fatal\" message=\"something is on fire!\" a=17 b=18")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -582,6 +824,10 @@ mod tests {
             a,
             "[\u{1b}[1;34m2018-01-29T00:50:43.176Z\u{1b}[0m] \u{1b}[31mFATAL\u{1b}[0m: something is on fire! \u{1b}[4;33ma\u{1b}[0m=\u{1b}[37m17\u{1b}[0m \u{1b}[4;33mb\u{1b}[0m=\u{1b}[37m18\u{1b}[0m"
         );
+
+        let b = fmt.reformat_str("time=\"2018-01-29T00:50:43.176Z\" level=\"fatal\" message=\"something is on fire!\" a=17 b=18")
+            .unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
