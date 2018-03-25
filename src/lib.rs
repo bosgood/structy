@@ -5,6 +5,9 @@ extern crate serde_json;
 use colored::*;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::hash_map;
+mod logfmt;
+
 
 #[derive(Clone)]
 pub struct Formatter {
@@ -47,16 +50,26 @@ impl Formatter {
         }
     }
 
-    pub fn reformat_str(&self, input: &str) -> Result<String, serde_json::Error> {
-        return match serde_json::from_str(input) {
+    pub fn reformat_str(&self, input: &str) -> Option<String> {
+        match serde_json::from_str(input) {
             Ok(val) => {
                 let v: serde_json::Value = val;
                 let fmt_clone = self.clone();
                 let s: String = v.format(fmt_clone, 0);
-                Ok(s)
-            }
-            Err(err) => Err(err),
-        };
+                Some(s)
+            },
+            Err(err) => self.reformat_space_sep_str(input)
+        }
+    }
+
+    fn reformat_space_sep_str(&self, input: &str) -> Option<String> {
+        let mut h = serde_json::Map::new();
+        for pair in input.split_whitespace() {
+            println!("{}", pair);
+            // h.insert(String::from(pair), serde_json::Value::String(String::from("")));
+        }
+        let fmt_clone = self.clone();
+        Some(h.format(fmt_clone, 0))
     }
 
     fn format_level(&self, level: &str) -> Option<String> {
@@ -122,149 +135,6 @@ impl Formatter {
 
 trait Formattable {
     fn format(&self, fmt: Formatter, depth: u32) -> String;
-}
-
-impl Formattable for serde_json::Value {
-    fn format(&self, fmt: Formatter, depth: u32) -> String {
-        if depth >= fmt.parse_depth {
-            return self.to_string();
-        }
-        match *self {
-            serde_json::Value::Number(ref l) => l.to_string(),
-            serde_json::Value::Bool(ref l) => l.to_string(),
-            serde_json::Value::Null => String::from("null"),
-            serde_json::Value::String(ref l) => l.to_string(),
-            serde_json::Value::Array(ref arr) => {
-                let values = arr.iter()
-                    .map(|item| item.format(fmt.clone(), depth + 1))
-                    .collect::<Vec<String>>();
-                format!("[{}]", values.join(", "))
-            }
-            serde_json::Value::Object(ref obj) => obj.format(fmt.clone(), depth + 1),
-        }
-    }
-}
-
-trait Hashable<K, V> {
-    fn get_string(&self, key: &str) -> Option<&V>;
-    fn keys(&self) -> Iterator<K, V>;
-}
-
-impl Formattable for Hashable {
-    fn format(&self, fmt: Formatter, depth: u32) -> String {
-        let mut buf = String::new();
-        let mut keys = BTreeSet::new();
-
-        for k in self.keys_iter() {
-            keys.insert(k);
-        }
-
-        let mut has_timestamp = false;
-        let mut has_log_level = false;
-        let mut has_message = false;
-
-        // Render timestamp first if present
-        for prop in fmt.timestamp_props() {
-            let key = String::from(prop);
-            if keys.contains(&key) {
-                let val = self.get_string(&key);
-                match val {
-                    Some(date_str) => {
-                        let datetime = iso8601::datetime(date_str.as_str());
-                        match datetime {
-                            Ok(_d) => {
-                                buf.push_str(&format!("[{}] ", fmt.format_timestamp(&date_str)));
-                                keys.remove(&key);
-                                has_timestamp = true;
-                            }
-                            Err(_) => {}
-                        }
-                    }
-                    None => {}
-                }
-            }
-        }
-
-        if !fmt.no_level {
-            // Then the log level
-            let level_key = String::from("level");
-            if keys.contains(&level_key) {
-                let val = self.get_string(&level_key);
-                match val {
-                    Some(lvl_str) => {
-                        let formatted_lvl_str = fmt.format_level(&lvl_str);
-                        match formatted_lvl_str {
-                            Some(s) => {
-                                buf.push_str(&s);
-                                keys.remove(&level_key);
-                                has_log_level = true;
-                            }
-                            None => {}
-                        }
-                    }
-                    None => {}
-                }
-            }
-        }
-
-        // Then the log message
-        for prop in vec!["message", "msg"] {
-            let key = String::from(prop);
-            if keys.contains(&key) {
-                let val = self.get_string(&key);
-                match val {
-                    Some(s) => {
-                        buf.push_str(&format!("{} ", s));
-                        keys.remove(&key);
-                        has_message = true;
-                    }
-                    None => {}
-                }
-            }
-        }
-
-        // Then render the rest of the params
-        let mut param_count = 0;
-        // for k in keys {
-        //     let val = self.get(k);
-        //     match val {
-        //         Some(v) => {
-        //             param_count += 1;
-        //             let formatted = v.clone().format(fmt.clone(), depth);
-        //             buf.push_str(&format!(
-        //                 "{k}={v} ",
-        //                 k = fmt.colorize_obj_key(k),
-        //                 v = fmt.colorize_obj_value(&formatted),
-        //             ));
-        //         }
-        //         None => {}
-        //     }
-        // }
-
-        if has_timestamp || has_log_level || has_message || param_count > 0 {
-            let strlen = buf.len();
-            buf.truncate(strlen - 1);
-        }
-        buf
-    }
-}
-
-impl Hashable<String, serde_json::Value> for serde_json::Map<String, serde_json::Value> {
-    fn get_string(&self, key: &str) -> Option<&String> {
-        match self.get(key) {
-            Some(v) => match v {
-                &serde_json::Value::String(ref s) => return Some(s),
-                _ => None,
-            },
-            _ => None,
-        }
-    }
-}
-
-impl Hashable for HashMap<String, String> {
-    fn get_string(&self, key: &str) -> Option<&String> {
-        self.get(key)
-    }
 }
 
 impl Formattable for serde_json::Map<String, serde_json::Value> {
@@ -378,11 +248,87 @@ impl Formattable for serde_json::Map<String, serde_json::Value> {
     }
 }
 
-impl Formattable for HashMap<String, String> {
+impl Formattable for serde_json::Value {
     fn format(&self, fmt: Formatter, depth: u32) -> String {
-        return String::from("");
+        if depth >= fmt.parse_depth {
+            return self.to_string();
+        }
+        match *self {
+            serde_json::Value::Number(ref l) => l.to_string(),
+            serde_json::Value::Bool(ref l) => l.to_string(),
+            serde_json::Value::Null => String::from("null"),
+            serde_json::Value::String(ref l) => l.to_string(),
+            serde_json::Value::Array(ref arr) => {
+                let values = arr.iter()
+                    .map(|item| item.format(fmt.clone(), depth + 1))
+                    .collect::<Vec<String>>();
+                format!("[{}]", values.join(", "))
+            }
+            serde_json::Value::Object(ref obj) => obj.format(fmt.clone(), depth + 1),
+        }
     }
 }
+
+impl Formattable for String {
+    fn format(&self, fmt: Formatter, depth: u32) -> String {
+        self.clone()
+    }
+}
+
+// trait Hashlike {
+//     fn get_string(&self, key: &str) -> Option<&String>;
+//     // fn keys<O>(&self) -> O
+//     //     where O: Iterator<Item=String>;
+//     fn keys(&self) -> Box<impl Iterator<Item=String>>;
+// }
+
+// impl Hashlike for serde_json::Map<String, serde_json::Value> {
+//     fn get_string(&self, key: &str) -> Option<&String> {
+//         match self.get(key) {
+//             Some(v) => match v {
+//                 &serde_json::Value::String(ref s) => return Some(s),
+//                 _ => None,
+//             },
+//             _ => None,
+//         }
+//     }
+//     fn keys(&self) -> Box<serde_json::map::Keys> {
+//         return Box::new(self.keys());
+//     }
+// }
+
+// impl Hashlike for HashMap<String, String> {
+//     fn get_string(&self, key: &str) -> Option<&String> {
+//         self.get(key)
+//     }
+//     fn keys(&self) -> Box<hash_map::Keys<String, String>> {
+//         return Box::new(self.keys());
+//     }
+// }
+
+// // Render timestamp first if present
+// for prop in &fmt.timestamp_props() {
+//     let key = String::from(prop);
+//     if keys.contains(&key) {
+//         let val = self.get_string(&key);
+//         match val {
+//             Some(date_str) => {
+//                 let datetime = iso8601::datetime(date_str.as_str());
+//                 match datetime {
+//                     Ok(_d) => {
+//                         buf.push_str(&format!("[{}] ", fmt.format_timestamp(&date_str)));
+//                         keys.remove(&key);
+//                         has_timestamp = true;
+//                     }
+//                     Err(_) => {}
+//                 }
+//             }
+//             None => {}
+//         }
+//     }
+// }
+
+// impl Formattable for Hashlike {
 
 #[cfg(test)]
 mod tests {
@@ -855,14 +801,14 @@ mod tests {
     fn reformat_unparsable_string() {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{");
-        assert!(a.is_err());
+        assert!(a.is_none());
     }
 
     #[test]
     fn reformat_obj_with_malformed_json() {
         let fmt = super::Formatter::new();
         let a = fmt.reformat_str("{\"time\": \"2018-01-29T00:50:43.176Z\" \"a\": 17}");
-        assert!(a.is_err())
+        assert!(a.is_none())
     }
 
     #[test]

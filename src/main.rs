@@ -82,8 +82,8 @@ fn main() {
                     process::exit(0);
                 }
                 match fmt.reformat_str(&line) {
-                    Ok(l) => println!("{}", l),
-                    Err(_) => print!("{}", line),
+                    Some(l) => println!("{}", l),
+                    None => print!("{}", line),
                 }
 
                 line.clear();
