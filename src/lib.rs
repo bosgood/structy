@@ -35,10 +35,7 @@ impl Formatter {
         timestamp_prop: String,
         highlight_properties: Vec<String>,
     ) -> Formatter {
-        let mut prop_set = BTreeSet::new();
-        for prop in &highlight_properties {
-            prop_set.insert(prop.to_string());
-        }
+        let prop_set: BTreeSet<_> = highlight_properties.iter().map(|p| p.to_string()).collect();
         Formatter {
             no_colors: no_colors,
             no_level: no_level,
