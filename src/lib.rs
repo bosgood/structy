@@ -3,9 +3,9 @@ extern crate iso8601;
 extern crate serde_json;
 
 use colored::*;
-use serde_json::{Error, Map, Value};
 use std::collections::BTreeSet;
 
+#[derive(Clone)]
 pub struct Formatter {
     pub no_colors: bool,
     pub no_level: bool,
@@ -46,35 +46,16 @@ impl Formatter {
         }
     }
 
-    pub fn reformat_str(&self, input: &str) -> Result<String, Error> {
+    pub fn reformat_str(&self, input: &str) -> Result<String, serde_json::Error> {
         return match serde_json::from_str(input) {
-            Ok(val) => Ok(self.format_value(val, 0)),
+            Ok(val) => {
+                let v: serde_json::Value = val;
+                let fmt_clone = self.clone();
+                let s: String = v.format(fmt_clone, 0);
+                Ok(s)
+            }
             Err(err) => Err(err),
         };
-    }
-
-    fn format_value(&self, val: Value, depth: u32) -> String {
-        if depth >= self.parse_depth {
-            return val.to_string();
-        }
-        let out = match val {
-            Value::Number(l) => l.to_string(),
-            Value::Bool(l) => l.to_string(),
-            Value::Null => String::from("null"),
-            Value::String(l) => l.to_string(),
-            Value::Array(arr) => {
-                let values = arr.iter()
-                    .map(|item| {
-                        let s = &self.clone();
-                        s.format_value(item.clone(), depth + 1)
-                    })
-                    .collect::<Vec<String>>();
-                format!("[{}]", values.join(", "))
-            }
-            Value::Object(obj) => self.format_obj(obj, depth + 1),
-        };
-
-        out
     }
 
     fn format_level(&self, level: &str) -> Option<String> {
@@ -113,11 +94,57 @@ impl Formatter {
         return timestamp.blue().bold().to_string();
     }
 
-    fn format_obj(&self, obj: Map<String, Value>, depth: u32) -> String {
+    fn colorize_obj_key(&self, key: &str) -> String {
+        if self.no_colors {
+            return key.to_string();
+        }
+        if self.highlight_properties_set.contains(&key.to_string()) {
+            return key.yellow().underline().to_string();
+        }
+        return key.dimmed().underline().to_string();
+    }
+
+    fn colorize_obj_value(&self, val: &str) -> String {
+        if self.no_colors {
+            return val.to_string();
+        }
+        return val.white().to_string();
+    }
+}
+
+trait Formattable {
+    fn format(&self, fmt: Formatter, depth: u32) -> String;
+}
+
+impl Formattable for serde_json::Value {
+    fn format(&self, fmt: Formatter, depth: u32) -> String {
+        if depth >= fmt.parse_depth {
+            return self.to_string();
+        }
+        let out = match *self {
+            serde_json::Value::Number(ref l) => l.to_string(),
+            serde_json::Value::Bool(ref l) => l.to_string(),
+            serde_json::Value::Null => String::from("null"),
+            serde_json::Value::String(ref l) => l.to_string(),
+            serde_json::Value::Array(ref arr) => {
+                let values = arr.iter()
+                    .map(|item| item.format(fmt.clone(), depth + 1))
+                    .collect::<Vec<String>>();
+                format!("[{}]", values.join(", "))
+            }
+            serde_json::Value::Object(ref obj) => obj.format(fmt.clone(), depth + 1),
+        };
+
+        out
+    }
+}
+
+impl Formattable for serde_json::Map<String, serde_json::Value> {
+    fn format(&self, fmt: Formatter, depth: u32) -> String {
         let mut buf = String::new();
         let mut keys = BTreeSet::new();
 
-        for k in obj.keys() {
+        for k in self.keys() {
             keys.insert(k);
         }
 
@@ -127,22 +154,22 @@ impl Formatter {
 
         // Render timestamp first if present
         let mut timestamp_props = vec!["time", "timestamp"];
-        if self.timestamp_prop != "" {
-            timestamp_props = vec![&self.timestamp_prop];
+        if fmt.timestamp_prop != "" {
+            timestamp_props = vec![&fmt.timestamp_prop];
         }
         for prop in timestamp_props {
             let key = String::from(prop);
             if keys.contains(&key) {
-                let val = obj.get(&key);
+                let val = self.get(&key);
                 match val {
                     Some(v) => match v.clone() {
-                        Value::String(date_string) => {
+                        serde_json::Value::String(date_string) => {
                             let datetime = iso8601::datetime(date_string.as_str());
                             match datetime {
                                 Ok(_d) => {
                                     buf.push_str(&format!(
                                         "[{}] ",
-                                        self.format_timestamp(&date_string)
+                                        fmt.format_timestamp(&date_string)
                                     ));
                                     keys.remove(&key);
                                     has_timestamp = true;
@@ -157,15 +184,15 @@ impl Formatter {
             }
         }
 
-        if !self.no_level {
+        if !fmt.no_level {
             // Then the log level
             let level_key = String::from("level");
             if keys.contains(&level_key) {
-                let val = obj.get(&level_key);
+                let val = self.get(&level_key);
                 match val {
                     Some(v) => match v.clone() {
-                        Value::String(lvl_str) => {
-                            let formatted_lvl_str = self.format_level(&lvl_str);
+                        serde_json::Value::String(lvl_str) => {
+                            let formatted_lvl_str = fmt.format_level(&lvl_str);
                             match formatted_lvl_str {
                                 Some(s) => {
                                     buf.push_str(&s);
@@ -186,10 +213,10 @@ impl Formatter {
         for prop in vec!["message", "msg"] {
             let key = String::from(prop);
             if keys.contains(&key) {
-                let val = obj.get(&key);
+                let val = self.get(&key);
                 match val {
                     Some(v) => match v.clone() {
-                        Value::String(s) => {
+                        serde_json::Value::String(s) => {
                             buf.push_str(&format!("{} ", s));
                             keys.remove(&key);
                             has_message = true;
@@ -204,15 +231,15 @@ impl Formatter {
         // Then render the rest of the params
         let mut param_count = 0;
         for k in keys {
-            let val = obj.get(k);
+            let val = self.get(k);
             match val {
                 Some(v) => {
                     param_count += 1;
-                    let formatted = self.format_value(v.clone(), depth);
+                    let formatted = v.clone().format(fmt.clone(), depth);
                     buf.push_str(&format!(
                         "{k}={v} ",
-                        k = self.colorize_obj_key(k),
-                        v = self.colorize_obj_value(&formatted),
+                        k = fmt.colorize_obj_key(k),
+                        v = fmt.colorize_obj_value(&formatted),
                     ));
                 }
                 None => {}
@@ -224,23 +251,6 @@ impl Formatter {
             buf.truncate(strlen - 1);
         }
         buf
-    }
-
-    fn colorize_obj_key(&self, key: &str) -> String {
-        if self.no_colors {
-            return key.to_string();
-        }
-        if self.highlight_properties_set.contains(&key.to_string()) {
-            return key.yellow().underline().to_string();
-        }
-        return key.dimmed().underline().to_string();
-    }
-
-    fn colorize_obj_value(&self, val: &str) -> String {
-        if self.no_colors {
-            return val.to_string();
-        }
-        return val.white().to_string();
     }
 }
 
