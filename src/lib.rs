@@ -51,14 +51,14 @@ impl Formatter {
 
     pub fn reformat_str(&self, input: &str) -> Result<String, Error> {
         return match serde_json::from_str(input) {
-            Ok(val) => self.format_value(val, 0),
+            Ok(val) => Ok(self.format_value(val, 0)),
             _ => Ok(input.to_string()),
         };
     }
 
-    fn format_value(&self, val: Value, depth: u32) -> Result<String, Error> {
+    fn format_value(&self, val: Value, depth: u32) -> String {
         if depth >= self.parse_depth {
-            return Ok(val.to_string());
+            return val.to_string();
         }
         let out = match val {
             Value::Number(l) => l.to_string(),
@@ -66,21 +66,18 @@ impl Formatter {
             Value::Null => String::from("null"),
             Value::String(l) => l.to_string(),
             Value::Array(arr) => {
-                let mut buf = String::new();
-                buf.push('[');
-                for (i, item) in arr.iter().enumerate() {
-                    if i > 0 {
-                        buf.push(' ');
-                    }
-                    buf.push_str(&self.format_value(item.clone(), depth + 1)?);
-                }
-                buf.push(']');
-                buf
+                let values = arr.iter()
+                    .map(|item| {
+                        let s = &self.clone();
+                        s.format_value(item.clone(), depth + 1)
+                    })
+                    .collect::<Vec<String>>();
+                format!("[{}]", values.join(", "))
             }
-            Value::Object(obj) => self.format_obj(obj, depth + 1)?,
+            Value::Object(obj) => self.format_obj(obj, depth + 1),
         };
 
-        Ok(out)
+        out
     }
 
     fn format_level(&self, level: &str) -> Option<String> {
@@ -119,7 +116,7 @@ impl Formatter {
         return timestamp.blue().bold().to_string();
     }
 
-    fn format_obj(&self, obj: Map<String, Value>, depth: u32) -> Result<String, Error> {
+    fn format_obj(&self, obj: Map<String, Value>, depth: u32) -> String {
         let mut buf = String::new();
         let mut keys = BTreeSet::new();
 
@@ -214,7 +211,7 @@ impl Formatter {
             match val {
                 Some(v) => {
                     param_count += 1;
-                    let formatted = self.format_value(v.clone(), depth)?;
+                    let formatted = self.format_value(v.clone(), depth);
                     buf.push_str(&format!(
                         "{k}={v} ",
                         k = self.colorize_obj_key(k),
@@ -229,7 +226,7 @@ impl Formatter {
             let strlen = buf.len();
             buf.truncate(strlen - 1);
         }
-        Ok(buf)
+        buf
     }
 
     fn colorize_obj_key(&self, key: &str) -> String {
@@ -616,5 +613,13 @@ mod tests {
             Ok(_) => assert_eq!(true, true),
             Err(_) => assert_eq!("bug!", ""),
         }
+    }
+
+    #[test]
+    fn reformat_array() {
+        let fmt = super::Formatter::new();
+        let a = fmt.reformat_str("[\"value1\", 1, 2, 3, \"value2\"]")
+            .unwrap();
+        assert_eq!(a, "[\"value1\", 1, 2, 3, \"value2\"]");
     }
 }
